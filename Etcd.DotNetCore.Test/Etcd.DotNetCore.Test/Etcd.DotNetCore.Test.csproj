@@ -13,7 +13,7 @@
 
   <ItemGroup>
     <Reference Include="dotnet-etcd">
-      <HintPath>..\..\dotnet-etcd\dotnet-etcd\bin\Debug\netcoreapp3.1\dotnet-etcd.dll</HintPath>
+      <HintPath>..\..\..\dotnet-etcd\dotnet-etcd\bin\Debug\netcoreapp3.1\dotnet-etcd.dll</HintPath>
     </Reference>
   </ItemGroup>
 

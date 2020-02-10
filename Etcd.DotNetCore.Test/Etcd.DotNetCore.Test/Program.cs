@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net.Mime;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
@@ -24,6 +25,8 @@ namespace Etcd.DotNetCore.Test
             //Console.WriteLine("Hello World!");
 
 
+            
+
             if (args != null && args.Length > 0)
             {
                 m_ClientName = args[0];
@@ -43,8 +46,8 @@ namespace Etcd.DotNetCore.Test
                     //await CreateMessageTree();
 
 
-                    await UpdateOnlineState();
                     await ClientWatcher();
+                    await UpdateOnlineState();
                     //await GroupMsgWatcher();
                     //await PrivateMsgWatcher();
                 }
@@ -147,7 +150,11 @@ namespace Etcd.DotNetCore.Test
             if (m_client != null)
             {
                 string path = $"Client/{m_ClientName}";
+
+                await m_client.DeleteAsync(path);
                 await m_client.PutAsync(path, "OffLine");
+
+                await OutputOnlineState();
 
                 m_client.Dispose();
                 m_client = null;
@@ -165,6 +172,13 @@ namespace Etcd.DotNetCore.Test
             {
                 await OutputOnlineState();
             }
+            else if(commandStr.StartsWith("update "))
+            {
+
+                string msg = commandStr.Replace("update ", "");
+                await UpdateOnlineState(msg);
+            }
+
             //发送群组消息
             else if (commandStr.StartsWith("groupmsg "))
             {
@@ -198,7 +212,18 @@ namespace Etcd.DotNetCore.Test
             if (m_client != null)
             {
                 string path = $"Client/{m_ClientName}";
+                await m_client.DeleteAsync(path);
                 await m_client.PutAsync(path, "OnLine");
+            }
+        }
+
+        private static async Task UpdateOnlineState(string state)
+        {
+            if (m_client != null)
+            {
+                string path = $"Client/{m_ClientName}";
+                await m_client.DeleteAsync(path);
+                await m_client.PutAsync(path, state);
             }
         }
 
@@ -247,26 +272,112 @@ namespace Etcd.DotNetCore.Test
         {
             if (m_client != null)
             {
-                var childs = await m_client.GetRangeAsync("Client/");
-
-                foreach (var child in childs.Kvs)
+                try
                 {
 
-                    m_client.Watch(child.Key.ToStringUtf8(), (response =>
+                    var childs = await m_client.GetRangeAsync("Client/");
+                    foreach (var child in childs.Kvs)
                     {
-                        foreach (WatchEvent e1 in response)
-                        {
-                            if (e1.Type == Event.Types.EventType.Put)
-                            {
-                                string client = e1.Key.Replace("Client/", "");
-                                string onlineresult = e1.Value;
-                                string result = $"通知:{client}状态是{onlineresult}";
-                                Console.WriteLine(result);
+                        string temp = $"方法 ClientWatcher 开始Watch{child.Key.ToStringUtf8()}";
+                        Console.WriteLine(temp);
 
+
+                        WatchRequest request = new WatchRequest()
+                        {
+                            CreateRequest = new WatchCreateRequest()
+                            {
+                                Key = child.Key
                             }
-                        }
-                    }), null, exceptionAction);
+                        };
+
+                         m_client.WatchRange(request, (response =>
+                            {
+                                foreach (WatchEvent e1 in response)
+                                {
+                                    if (e1.Type == Event.Types.EventType.Put)
+                                    {
+                                        string client = e1.Key.Replace("Client/", "");
+                                        string onlineresult = e1.Value;
+                                        string result = $"方法 ClientWatcher  Put 通知:{client}状态是{onlineresult}";
+                                        Console.WriteLine(result);
+
+                                        AddWatcher(e1.Key);
+                                    }
+                                    else if (e1.Type == Event.Types.EventType.Delete)
+                                    {
+                                        string client = e1.Key.Replace("Client/", "");
+                                        string onlineresult = e1.Value;
+                                        string result = $"方法 ClientWatcher Delete 通知:{client}Delete";
+                                        Console.WriteLine(result);
+                                    }
+
+
+                                }
+                            })
+                            , null, exceptionAction);
+
+                    }
                 }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                    throw;
+                }
+
+
+
+
+            }
+        }
+
+
+        private static void AddWatcher(string pathkey)
+        {
+            if (m_client != null)
+            {
+                try
+                {
+
+                    WatchRequest request = new WatchRequest()
+                    {
+                        CreateRequest = new WatchCreateRequest()
+                        {
+                            Key = ByteString.CopyFromUtf8(pathkey)
+                        }
+                    };
+                    string temp = $"方法 AddWatcher 开始Watch{pathkey}";
+                    Console.WriteLine(temp);
+
+                    m_client.WatchRange(request, (response =>
+                        {
+                            foreach (WatchEvent e1 in response)
+                            {
+                                if (e1.Type == Event.Types.EventType.Put)
+                                {
+                                    string client = e1.Key.Replace("Client/", "");
+                                    string onlineresult = e1.Value;
+                                    string result = $"方法 ClientWatcher  Put 通知:{client}状态是{onlineresult}";
+                                    Console.WriteLine(result);
+
+                                     AddWatcher(e1.Key);
+                                }
+                                else if (e1.Type == Event.Types.EventType.Delete)
+                                {
+                                    string client = e1.Key.Replace("Client/", "");
+                                    string onlineresult = e1.Value;
+                                    string result = $"方法 ClientWatcher Delete 通知:{client}Delete";
+                                    Console.WriteLine(result);
+                                }
+                            }
+                        })
+                        , null, exceptionAction);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                    throw;
+                }
+
 
 
 
